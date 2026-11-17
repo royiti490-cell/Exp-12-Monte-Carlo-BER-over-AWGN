@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Adaptive Monte Carlo BER Simulator - Dynamic & Movable Dashboard</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    /* Styling scrollbars and custom input elements */
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    .draggable-card {
+      transition: box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+    .dragging {
+      opacity: 0.5;
+      border: 2px dashed var(--primary);
+    }
+    .drag-handle {
+      cursor: grab;
+      user-select: none;
+    }
+    .drag-handle:active {
+      cursor: grabbing;
+    }
+    @keyframes pulse-glow {
+      0%, 100% { opacity: 0.3; transform: scale(0.98); }
+      50% { opacity: 0.8; transform: scale(1.02); }
+    }
+    .pulse-active {
+      animation: pulse-glow 1.5s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body class="bg-[var(--background)] text-[var(--foreground)] antialiased p-4 sm:p-6 min-w-[320px]">
+  <div class="max-w-7xl mx-auto space-y-5">
+
+    <!-- Top Navigation & Controls Bar -->
+    <header class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-[var(--border)]">
+      <div>
+        <div class="flex items-center gap-2.5">
+          <h1 class="text-2xl font-bold tracking-tight text-[var(--foreground)]">Adaptive Monte Carlo BER Simulator</h1>
+          <span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-[var(--primary)]/15 text-[var(--primary)] border border-[var(--primary)]/30">
+            Live Moving Engine
+          </span>
+        </div>
+        <p class="text-sm text-[var(--muted-foreground)] mt-1">
+          Real-time adaptive Monte Carlo (<strong class="text-[var(--foreground)]">&ge;200 bit errors</strong> or <strong class="text-[var(--foreground)]">10<sup>6</sup> bits</strong>) with live moving I/Q constellation scope & draggable layout.
+        </p>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2 text-xs">
+        <span class="inline-flex items-center px-2.5 py-1 rounded-full font-medium bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+          Target Errors: 200
+        </span>
+        <span class="inline-flex items-center px-2.5 py-1 rounded-full font-medium bg-blue-500/10 text-blue-500 border border-blue-500/20">
+          Ceiling: 10<sup>6</sup> Bits
+        </span>
+        <button onclick="resetLayout()" class="px-2.5 py-1 rounded-md border border-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--card)] transition">
+          Reset Layout
+        </button>
+      </div>
+    </header>
+
+    <!-- Draggable / Reorderable Container Grid -->
+    <div id="dashboardGrid" class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+      <!-- CARD 1: Simulation Parameter Form -->
+      <div id="card-params" draggable="true" class="draggable-card lg:col-span-4 bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 shadow-sm space-y-4">
+        <div class="flex items-center justify-between border-b border-[var(--border)] pb-3">
+          <h2 class="text-sm font-semibold text-[var(--foreground)] flex items-center gap-2">
+            <svg class="w-4 h-4 text-[var(--primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path>
+            </svg>
+            Parameters
+          </h2>
+          <span class="drag-handle px-1.5 py-0.5 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] border border-transparent hover:border-[var(--border)] rounded" title="Drag to reorder">
+            &#x2725; Move
+          </span>
+        </div>
+
+        <form id="simForm" class="space-y-3.5" onsubmit="event.preventDefault(); startSimulation();">
+          <!-- Modulation Selection -->
+          <div>
+            <label class="block text-xs font-medium text-[var(--muted-foreground)] mb-1.5">MODULATION SCHEME</label>
+            <div class="grid grid-cols-3 gap-2">
+              <label class="relative flex items-center justify-center p-2 border rounded-lg cursor-pointer transition text-xs font-medium text-center border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--foreground)]" id="label-qpsk">
+                <input type="radio" name="modulation" value="QPSK" checked class="sr-only" onchange="onModulationChange('QPSK')">
+                <span>QPSK (k=2)</span>
+              </label>
+              <label class="relative flex items-center justify-center p-2 border border-[var(--border)] rounded-lg cursor-pointer transition text-xs font-medium text-center hover:bg-[var(--card)]/80 text-[var(--muted-foreground)]" id="label-bpsk">
+                <input type="radio" name="modulation" value="BPSK" class="sr-only" onchange="onModulationChange('BPSK')">
+                <span>BPSK (k=1)</span>
+              </label>
+              <label class="relative flex items-center justify-center p-2 border border-[var(--border)] rounded-lg cursor-pointer transition text-xs font-medium text-center hover:bg-[var(--card)]/80 text-[var(--muted-foreground)]" id="label-16qam">
+                <input type="radio" name="modulation" value="16QAM" class="sr-only" onchange="onModulationChange('16QAM')">
+                <span>16QAM (k=4)</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Eb/N0 Settings -->
+          <div class="grid grid-cols-3 gap-2">
+            <div>
+              <label class="block text-[11px] font-medium text-[var(--muted-foreground)] mb-1">E<sub>b</sub>/N<sub>0</sub> Min</label>
+              <input type="number" id="ebn0Min" step="0.5" value="0.0" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--foreground)] focus:ring-1 focus:ring-[var(--primary)]">
+            </div>
+            <div>
+              <label class="block text-[11px] font-medium text-[var(--muted-foreground)] mb-1">E<sub>b</sub>/N<sub>0</sub> Max</label>
+              <input type="number" id="ebn0Max" step="0.5" value="10.0" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--foreground)] focus:ring-1 focus:ring-[var(--primary)]">
+            </div>
+            <div>
+              <label class="block text-[11px] font-medium text-[var(--muted-foreground)] mb-1">Step (dB)</label>
+              <input type="number" id="ebn0Step" step="0.5" min="0.25" max="3" value="1.0" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--foreground)] focus:ring-1 focus:ring-[var(--primary)]">
+            </div>
+          </div>
+
+          <!-- Adaptive Stopping Rule Settings -->
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[11px] font-medium text-[var(--muted-foreground)] mb-1">Target Errors</label>
+              <input type="number" id="targetErrors" min="10" max="5000" value="200" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--foreground)] focus:ring-1 focus:ring-[var(--primary)]">
+            </div>
+            <div>
+              <label class="block text-[11px] font-medium text-[var(--muted-foreground)] mb-1">Bit Cap / Point</label>
+              <input type="number" id="maxBits" step="100000" min="10000" max="10000000" value="1000000" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--foreground)] focus:ring-1 focus:ring-[var(--primary)]">
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="flex items-center gap-2 pt-2">
+            <button type="submit" id="btnRun" class="flex-1 bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-95 font-medium py-2 px-3 rounded-lg text-xs transition flex items-center justify-center gap-1.5 shadow-sm">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+              <span>Run Monte Carlo</span>
+            </button>
+            <button type="button" id="btnStop" disabled onclick="stopSimulation()" class="bg-[var(--card)] border border-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] font-medium py-2 px-3 rounded-lg text-xs transition disabled:opacity-40">
+              Stop
+            </button>
+            <button type="button" onclick="exportCSV()" class="bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--border)]/30 font-medium py-2 px-2.5 rounded-lg text-xs transition" title="Export CSV">
+              CSV
+            </button>
+          </div>
+        </form>
+
+        <!-- Live Status Display -->
+        <div id="statusBox" class="p-3 rounded-lg bg-[var(--background)] border border-[var(--border)] space-y-1.5">
+          <div class="flex justify-between text-xs">
+            <span class="text-[var(--muted-foreground)]" id="statusLabel">Status: Idle</span>
+            <span class="font-mono font-semibold text-[var(--primary)]" id="progressPct">0%</span>
+          </div>
+          <div class="w-full bg-[var(--card)] h-1.5 rounded-full overflow-hidden border border-[var(--border)]">
+            <div id="progressBar" class="bg-[var(--primary)] h-full transition-all duration-150" style="width: 0%"></div>
+          </div>
+          <p class="text-[11px] text-[var(--muted-foreground)] font-mono truncate" id="currentPointDetails">Point: - | Batch: -</p>
+        </div>
+      </div>
+
+      <!-- CARD 2: Moving I/Q Constellation Scope (Live Phosphor Display) -->
+      <div id="card-scope" draggable="true" class="draggable-card lg:col-span-4 bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 shadow-sm space-y-3">
+        <div class="flex items-center justify-between border-b border-[var(--border)] pb-3">
+          <div class="flex items-center gap-2">
+            <h2 class="text-sm font-semibold text-[var(--foreground)] flex items-center gap-1.5">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block pulse-active"></span>
+              Live I/Q Constellation Scope
+            </h2>
+          </div>
+          <span class="drag-handle px-1.5 py-0.5 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] border border-transparent hover:border-[var(--border)] rounded" title="Drag to reorder">
+            &#x2725; Move
+          </span>
+        </div>
+
+        <div class="w-full flex flex-col items-center justify-center">
+          <canvas id="scopeCanvas" width="340" height="300" class="w-full max-w-[340px] rounded-lg bg-[var(--background)] border border-[var(--border)] block shadow-inner"></canvas>
+        </div>
+
+        <div class="flex justify-between items-center text-[11px] text-[var(--muted-foreground)] pt-1 px-1">
+          <span>In-Phase (I) &harr; Quadrature (Q)</span>
+          <span id="scopeNoiseLabel" class="font-mono font-semibold text-emerald-500">&sigma;<sub>dim</sub> = --</span>
+        </div>
+      </div>
+
+      <!-- CARD 3: Explicit Parameter Math -->
+      <div id="card-math" draggable="true" class="draggable-card lg:col-span-4 bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 shadow-sm space-y-3">
+        <div class="flex items-center justify-between border-b border-[var(--border)] pb-3">
+          <h2 class="text-sm font-semibold text-[var(--foreground)] flex items-center gap-2">
+            <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+            </svg>
+            Explicit Mathematical Trackers
+          </h2>
+          <span class="drag-handle px-1.5 py-0.5 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] border border-transparent hover:border-[var(--border)] rounded" title="Drag to reorder">
+            &#x2725; Move
+          </span>
+        </div>
+
+        <div class="space-y-1.5 text-xs">
+          <div class="flex justify-between items-center py-1 border-b border-[var(--border)]">
+            <span class="text-[var(--muted-foreground)]">Bits per Symbol (k)</span>
+            <span class="font-mono font-semibold" id="disp-k">2 bits</span>
+          </div>
+          <div class="flex justify-between items-center py-1 border-b border-[var(--border)]">
+            <span class="text-[var(--muted-foreground)]">Raw Energy (E<sub>s,raw</sub>)</span>
+            <span class="font-mono font-semibold" id="disp-esraw">2.0000</span>
+          </div>
+          <div class="flex justify-between items-center py-1 border-b border-[var(--border)]">
+            <span class="text-[var(--muted-foreground)]">Norm Factor (&alpha;)</span>
+            <span class="font-mono font-semibold text-[var(--primary)]" id="disp-alpha">1 / &radic;2 &approx; 0.7071</span>
+          </div>
+          <div class="flex justify-between items-center py-1 border-b border-[var(--border)]">
+            <span class="text-[var(--muted-foreground)]">Bit Energy (E<sub>b</sub>)</span>
+            <span class="font-mono font-semibold" id="disp-eb">E<sub>s</sub> / 2 = 0.5000</span>
+          </div>
+          <div class="flex justify-between items-center py-1 border-b border-[var(--border)]">
+            <span class="text-[var(--muted-foreground)]">Noise Density (N<sub>0</sub>)</span>
+            <span class="font-mono font-semibold" id="disp-n0">E<sub>b</sub> / 10<sup>(&gamma;/10)</sup></span>
+          </div>
+          <div class="flex justify-between items-center py-1">
+            <span class="text-[var(--muted-foreground)]">I/Q Std Dev (&sigma;<sub>dim</sub>)</span>
+            <span class="font-mono font-semibold text-emerald-500" id="disp-sigmadim">&radic;(N<sub>0</sub> / 2)</span>
+          </div>
+        </div>
+
+        <div class="mt-2 p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[11px] text-[var(--muted-foreground)] space-y-1">
+          <div class="font-medium text-[var(--foreground)]">Adaptive Stopping Guarantees:</div>
+          <div>&bull; <strong>200 errors:</strong> std error = 1/&radic;200 &approx; 7.07%</div>
+          <div>&bull; <strong>10<sup>6</sup> bits:</strong> caps high-SNR runtime with 10<sup>-6</sup> resolution floor.</div>
+        </div>
+      </div>
+
+      <!-- CARD 4: Live Moving BER Semi-Log Plot -->
+      <div id="card-plot" draggable="true" class="draggable-card lg:col-span-12 bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 shadow-sm space-y-3">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[var(--border)] pb-3">
+          <div class="flex items-center gap-2">
+            <h2 class="text-sm font-semibold text-[var(--foreground)] flex items-center gap-2">
+              <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path>
+              </svg>
+              Bit Error Rate (BER) vs. E<sub>b</sub>/N<sub>0</sub> (Semi-Log Canvas)
+            </h2>
+          </div>
+
+          <div class="flex items-center gap-4 text-xs">
+            <div class="flex items-center gap-1.5">
+              <span class="w-3.5 h-0.5 bg-blue-500 inline-block border-t border-dashed border-blue-500"></span>
+              <span class="text-[var(--muted-foreground)]">Theoretical Q/erfc</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
+              <span class="text-[var(--muted-foreground)]">&ge;200 Errors</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span class="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
+              <span class="text-[var(--muted-foreground)]">10<sup>6</sup> Bit Cap</span>
+            </div>
+            <span class="drag-handle px-1.5 py-0.5 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] border border-transparent hover:border-[var(--border)] rounded" title="Drag to reorder">
+              &#x2725; Move
+            </span>
+          </div>
+        </div>
+
+        <div class="w-full relative overflow-hidden bg-[var(--background)] border border-[var(--border)] rounded-lg p-2">
+          <canvas id="berCanvas" width="1050" height="380" class="w-full block"></canvas>
+        </div>
+      </div>
+
+      <!-- CARD 5: Results Table -->
+      <div id="card-table" draggable="true" class="draggable-card lg:col-span-12 bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 shadow-sm space-y-3">
+        <div class="flex items-center justify-between border-b border-[var(--border)] pb-3">
+          <h2 class="text-sm font-semibold text-[var(--foreground)] flex items-center gap-2">
+            <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+            </svg>
+            Adaptive Monte Carlo Execution History
+          </h2>
+          <span class="drag-handle px-1.5 py-0.5 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] border border-transparent hover:border-[var(--border)] rounded" title="Drag to reorder">
+            &#x2725; Move
+          </span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="border-b border-[var(--border)] text-[var(--muted-foreground)]">
+                <th class="py-2 px-3">E<sub>b</sub>/N<sub>0</sub> (dB)</th>
+                <th class="py-2 px-3">N<sub>0</sub></th>
+                <th class="py-2 px-3">&sigma;<sub>dim</sub></th>
+                <th class="py-2 px-3">Bit Errors</th>
+                <th class="py-2 px-3">Total Bits</th>
+                <th class="py-2 px-3">Simulated BER</th>
+                <th class="py-2 px-3">Theory BER</th>
+                <th class="py-2 px-3">Precision (&plusmn;)</th>
+                <th class="py-2 px-3">Stop Reason</th>
+              </tr>
+            </thead>
+            <tbody id="resultsTableBody" class="divide-y divide-[var(--border)] font-mono">
+              <tr>
+                <td colspan="9" class="py-5 text-center text-[var(--muted-foreground)] font-sans">
+                  No simulation points recorded. Click "Run Monte Carlo" to watch the live simulation run!
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // --- State & Variables ---
+    let currentModulation = "QPSK";
+    let isRunning = false;
+    let cancelRequested = false;
+    let simHistory = [];
+    let liveScopeSymbols = []; // array of {i, q, isError} for dynamic phosphor canvas
+
+    // --- Modulation Definitions ---
+    const MODS = {
+      BP
